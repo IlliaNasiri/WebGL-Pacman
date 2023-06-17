@@ -33,6 +33,8 @@ class WallEntity {
 }
 
 class GameEntity {
+    //TODO: MAYBE MOVE THIS TO THE CHILD CLASS
+    moveDirection = null;
     //TODO: ADD MOVEMENT DIRECTION
     constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
         this.position = [x0, y0];
@@ -74,18 +76,44 @@ class GameEntity {
         return (position[0] < 0 || position[0] >= this.LOGICAL_WIDTH) || (position[1] < 0 || position[1] >= this.LOGICAL_HEIGHT)
     }
 
-}
+    move(){
+        let moveAction = this.getMoveAction();
+        if (moveAction == null) return;
+        let legalActions = this.getLegalMoves();
+        let actionIsLegal = legalActions.some( legalAction => PositionHelper.positionEqual(legalAction, moveAction) )
+        if(actionIsLegal) {
+            this.position = PositionHelper.add(this.position, moveAction);
+        }
 
-class PacmanEntity extends GameEntity{
-    constructor(x0, y0, renderCoordinates) {
-        super(x0, y0, renderCoordinates)
+    }
+
+    getMoveAction() {
+        let ret = this.moveDirection;
+        this.moveDirection = null;
+        return ret
     }
 
 }
 
+class PacmanEntity extends GameEntity{
+
+    constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
+        super(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+    }
+
+    getMoveAction() {
+        return this.moveDirection;
+    }
+}
+
 class GhostEntity extends GameEntity{
-    constructor(x0, y0, renderCoordinates) {
-        super(x0, y0, renderCoordinates)
+    constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
+        super(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+    }
+
+    getMoveAction() {
+        // TODO: IMPLEMENT CHASING ALGORITHM FOR A GHOST
+        return [1,0]
     }
 
 }
@@ -120,10 +148,41 @@ const walls = [
 ]
 
 function main() {
-
     let gameEntity = new GameEntity(1,0, [], walls, 9, 10);
+    // setInterval(() => {
+    //     gameEntity.move();
+    //     console.log(gameEntity.position)
+    // }, 1000)
+    // gameEntity.moveDirection = [1,0]
+    // gameEntity.move()
+    // console.log(gameEntity.position)
 
 
+    // console.log(gameEntity.position)
+    // console.log(gameEntity.getLegalMoves())
+    // gameEntity.moveDirection = [1,0]
+    // gameEntity.move()
+    setUpDirectionKeyEventListener(gameEntity);
+}
+
+function setUpDirectionKeyEventListener(pacman) {
+    document.addEventListener("keydown", (event) => {
+        switch (event.code) {
+
+            case "KeyW":
+                pacman.moveDirection = [0,1];
+                break;
+            case "KeyD":
+                pacman.moveDirection = [1, 0];
+                break;
+            case "KeyS":
+                pacman.moveDirection = [0, -1];
+                break;
+            case "KeyA":
+                pacman.moveDirection = [-1, 0];
+                break;
+        }
+    })
 }
 
 main();
