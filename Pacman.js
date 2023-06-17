@@ -33,7 +33,7 @@ class WallEntity {
 }
 
 class GameEntity {
-    //TODO: MAYBE MOVE THIS TO THE CHILD CLASS
+    //TODO: MAYBE MOVE THIS TO THE CHILD CLASS.
     moveDirection = null;
     //TODO: ADD MOVEMENT DIRECTION
     constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
