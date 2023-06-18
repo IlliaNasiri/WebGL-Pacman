@@ -14,18 +14,58 @@ class PositionHelper {
     static manhattanDistance(pos1, pos2) {
         return Math.abs(pos1[0] - pos2[0]) + Math.abs(pos1[1] - pos2[1]);
     }
+    static isPositionFormatValid(pos) {
+        if (!Array.isArray(pos)) return false;
+        if (pos.length != 2) return false;
+        return true;
+    }
+
 }
 
-class GameManager {}
-
 class Game {
-    LOGICAL_WIDTH = 9;
-    LOGICAL_HEIGHT = 10;
-    constructor(walls, dots) {
-        this.score = 0;
-        this.timer = 60;
-        this.walls = walls;
-        this.dots = dots;
+    constructor(pacman, ghosts, walls, dots, logical_width, logical_height) {
+        this._score = 0;
+        this._pacman = pacman;
+        this._ghosts = ghosts;
+        this._walls = walls;
+        this._dots = dots;
+        this._logical_width = logical_width;
+        this._logical_height = logical_height;
+    }
+
+    get pacman() {return this._pacman;}
+    set pacman(value) {this._pacman = value;}
+    get ghosts() {return this._ghosts;}
+    set ghosts(value) {this._ghosts = value;}
+    get walls() {return this._walls;}
+    set walls(value) {this._walls = value;}
+    get dots() {return this._dots;}
+    set dots(value) {this._dots = value;}
+    get logical_width() {return this._logical_width;}
+    set logical_width(value) {this._logical_width = value;}
+    get logical_height() {return this._logical_height;}
+    set logical_height(value) {this._logical_height = value;}
+
+    isGameOver() {
+        return this.ghosts.some(ghost => PositionHelper.positionEqual(ghost.position, this.pacman.position))
+        // TODO: ADD CASES WHEN WITH DOTS
+    }
+
+    isPositionLegal(pos) {
+        //TODO: WRITE A CLASS FOR THE EXCEPTION
+        if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.isPositionLegal()."
+        return !(this.#isWallPosition(pos)) && !(this.#doesPositionExceedLogicalBounds(pos))
+    }
+    #isWallPosition(pos) {
+        if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.#isWallPosition()."
+        for(let WallEntity of this.walls)
+            for(let wallPosition of WallEntity.positions)
+                if( PositionHelper.positionEqual(wallPosition, pos) ) return true;
+        return false;
+    }
+    #doesPositionExceedLogicalBounds(pos) {
+        if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.doesPositionExceedLogicalBounds()."
+        return (pos[0] < 0 || pos[0] >= this.logical_width) || (pos[1] < 0 || pos[1] >= this.logical_height);
     }
 
 }
@@ -35,136 +75,115 @@ class WallEntity {
         this.positions = positions;
         this.renderCoordinates = renderCoordinates;
     }
-
 }
 
 class GameEntity {
-    //TODO: MAYBE MOVE THIS TO THE CHILD CLASS.
-    moveDirection = null;
-    //TODO: ADD MOVEMENT DIRECTION
-    constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
-        this.position = [x0, y0];
-        this.renderCoordinates = renderCoordinates;
-        this.walls = walls;
-        this.LOGICAL_WIDTH = LOGICAL_WIDTH;
-        this.LOGICAL_HEIGHT = LOGICAL_HEIGHT;
-        this.actions = [
-            [0, 1], // North
-            [0, -1], // South
-            [1, 0], // East,
-            [-1, 0] // West
-        ]
+    constructor(x0, y0, renderCoordinates) {
+        this._position = [x0, y0];
+        this._renderCoordinates = renderCoordinates;
+        this._directions = [ [0, 1], [0, -1], [1, 0], [-1, 0] ]
+        this._gameInstance = null;
+        this._moveDirection = null;
     }
+
     getLegalMoves() {
-        let legalMoves = []
-        this.actions.forEach( action => {
-            let newPosition = PositionHelper.add(this.position, action)
-            if(!this.doesPositionOverlapWithWalls(newPosition) && !this.doesExitGameBorders(newPosition)) {
-                legalMoves.push(action);
-            }
-        } )
+        this.checkGameInstance();
+        let legalMoves = [];
+        this._directions.forEach( direction => {
+            let newPos = PositionHelper.add(this._position, direction);
+            if(this._gameInstance.isPositionLegal(newPos))
+                legalMoves.push(direction);
+        } );
         return legalMoves;
     }
-
-    doesPositionOverlapWithWalls(position) {
-
-        for(let WallEntity of this.walls) {
-            for(let wallPosition of WallEntity.positions) {
-                if( PositionHelper.positionEqual(wallPosition, position) ) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    doesExitGameBorders(position) {
-        return (position[0] < 0 || position[0] >= this.LOGICAL_WIDTH) || (position[1] < 0 || position[1] >= this.LOGICAL_HEIGHT)
-    }
-
     move(){
+        this.checkGameInstance()
+
         let moveAction = this.getMoveAction();
         if (moveAction == null) return;
+
         let legalActions = this.getLegalMoves();
         let actionIsLegal = legalActions.some( legalAction => PositionHelper.positionEqual(legalAction, moveAction) )
-        if(actionIsLegal) {
-            this.position = PositionHelper.add(this.position, moveAction);
-        }
-
+        if(actionIsLegal)
+            this._position = PositionHelper.add(this._position, moveAction);
+        this._moveDirection = null
     }
+    set gameInstance(gameInstance) {this._gameInstance = gameInstance;}
+    get gameInstance() {return this._gameInstance;}
+    get position() {return this._position;}
+    set position(pos) {
+        PositionHelper.isPositionFormatValid(pos)
+        this._position = pos;
+    }
+    set moveDirection(moveDirection) {this._moveDirection = moveDirection}
+    get moveDirection() {return this._moveDirection}
 
     getMoveAction() {
-        let ret = this.moveDirection;
-        this.moveDirection = null;
-        return ret
+        this.checkGameInstance();
+        return this._moveDirection;
+    }
+    checkGameInstance() {
+        if (this._gameInstance == null) throw "Game instance is not defined for gameEntity!"
     }
 
 }
 
 class PacmanEntity extends GameEntity{
 
-    constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
-        super(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+    constructor(x0, y0, renderCoordinates) {
+        super(x0, y0, renderCoordinates)
     }
-
     getMoveAction() {
-        return this.moveDirection;
+        this.checkGameInstance();
+        return this._moveDirection;
     }
 }
 
 class GhostEntity extends GameEntity{
 
-    constructor(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT, ghostType) {
-        super(x0, y0, renderCoordinates, walls, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-        // can be either greedy or minimax, or random
+    constructor(x0, y0, renderCoordinates, ghostType) {
+        super(x0, y0, renderCoordinates, walls);
+        if (ghostType != "minimax" && ghostType != "greedy" && ghostType != "random") throw "Invalid ghost type!";
         this.ghostType = ghostType;
     }
-
     getMoveAction() {
-        // TODO: IMPLEMENT CHASING ALGORITHM FOR A GHOST
+        this.checkGameInstance();
         let action = [0,0]
-
         switch (this.ghostType) {
-            case "greedy":
-                //todo: pass pacman position
-                action = getGreedyAction();
-                break;
             case "minimax":
-                action = getMinimaxAction();
+                // action = thus.#getMinimaxAction();
                 break;
             case "random":
-                action = getRandomAction();
+                action = this.getRandomAction();
+                break;
+            default: // greedy case
+                action = this.getGreedyAction(this._gameInstance.pacman.position);
                 break;
         }
-        //TODO: MAKE EXCEPTION CLASS FOR EMPTY ACTION
         return action;
     }
 
     getGreedyAction(pacmanPosition) {
         // EDGE CASE: PACMAN AND GHOST ARE IN SAME POSITION, RETURN [0,0]
-        if( PositionHelper.manhattanDistance(this.position, pacmanPosition) == 0 ) return [0,0];
-
-        let action = this.actions[0];
-        let manhattanDistance = PositionHelper.manhattanDistance( PositionHelper.add(this.position, action), pacmanPosition );
-        let legalMoves = this.getLegalMoves();
-        console.log(legalMoves)
+        if( PositionHelper.manhattanDistance(this._position, pacmanPosition) == 0 ) return [0,0];
+        let legalMoves = this.getLegalMoves()
+        let action = legalMoves[0]
+        let manhattanDistance = PositionHelper.manhattanDistance( PositionHelper.add(this._position, action), pacmanPosition );
         for(let i = 1; i < legalMoves.length; i++) {
-            if(manhattanDistance >= PositionHelper.manhattanDistance( PositionHelper.add(this.position, legalMoves[i]), pacmanPosition )) {
+            if(manhattanDistance >= PositionHelper.manhattanDistance( PositionHelper.add(this._position, legalMoves[i]), pacmanPosition )) {
                 action = legalMoves[i]
-                manhattanDistance = PositionHelper.manhattanDistance( PositionHelper.add(this.position, legalMoves[i]), pacmanPosition );
+                manhattanDistance = PositionHelper.manhattanDistance( PositionHelper.add(this._position, legalMoves[i]), pacmanPosition );
             }
         }
         return action;
     }
 
     getRandomAction() {
-        return this.actions[Math.floor(Math.random() * 5)]
+        let legalMoves = this.getLegalMoves();
+        return legalMoves[Math.floor(Math.random() * (legalMoves.length + 1))]
     }
 
-
 }
-
-// The main loop of the game that keeps the game running
 
 const walls = [
     new WallEntity(
@@ -195,23 +214,30 @@ const walls = [
 
 function main() {
 
-    let ghostEntity = new GhostEntity(0,7, [], walls, 9, 10, "greedy");
-    console.log(ghostEntity.getGreedyAction([2, 6]));
+    let ghosts = [new GhostEntity(8, 9,[], "greedy"), new GhostEntity(4,5, [], "random")];
+    let pacman = new PacmanEntity(0,0, []);
+    let game = new Game(pacman, ghosts, walls, [], 9, 10);
+    pacman.gameInstance = game;
+    ghosts[0].gameInstance = game;
+    ghosts[1].gameInstance = game;
 
-    // setInterval(() => {
-    //     gameEntity.move();
-    //     console.log(gameEntity.position)
-    // }, 1000)
-    // gameEntity.moveDirection = [1,0]
-    // gameEntity.move()
-    // console.log(gameEntity.position)
+    setUpDirectionKeyEventListener(pacman)
+    // setInterval(() => {pacman.move(); console.log(pacman.position)}, 500)
+    let myInterval = setInterval(() => {
+        console.log("Pacman: ", pacman.position);
+        pacman.move();
+        for(let ghost of ghosts) {
+            ghost.move();
+            console.log("ghost:", ghost.ghostType, " ", ghost.position);
+        }
+        console.log("\n")
 
+        if(game.isGameOver()) {
+            console.log("GAME OVER!")
+            clearInterval(myInterval)
+        }
 
-    // console.log(gameEntity.position)
-    // console.log(gameEntity.getLegalMoves())
-    // gameEntity.moveDirection = [1,0]
-    // gameEntity.move()
-    // setUpDirectionKeyEventListener(gameEntity);
+    }, 500)
 }
 
 function setUpDirectionKeyEventListener(pacman) {
