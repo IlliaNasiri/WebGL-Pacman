@@ -24,13 +24,17 @@ class PositionHelper {
 
 class Game {
     constructor(pacman, ghosts, walls, dots, logical_width, logical_height) {
+        this._logical_width = logical_width;
+        this._logical_height = logical_height;
         this._score = 0;
         this._pacman = pacman;
         this._ghosts = ghosts;
         this._walls = walls;
-        this._dots = dots;
-        this._logical_width = logical_width;
-        this._logical_height = logical_height;
+
+        if (dots == null)
+            this._dots = this.#generateDotPositions();
+        else
+            this.dots = dots;
     }
 
     get pacman() {return this._pacman;}
@@ -46,11 +50,32 @@ class Game {
     get logical_height() {return this._logical_height;}
     set logical_height(value) {this._logical_height = value;}
 
+    //todo: finish is game over class
     isGameOver() {
         return this.ghosts.some(ghost => PositionHelper.positionEqual(ghost.position, this.pacman.position))
         // TODO: ADD CASES WHEN WITH DOTS
+    };
+    updateScore() {
+        //
+    };
+    #generateDotPositions() {
+        let dotArray = [];
+        for(let i = 0; i < this.logical_width; i++) {
+            for(let j = 0; j < this.logical_height; j++) {
+                let pos = [i, j];
+                let doesPosOverlapWall = this.#isWallPosition(pos);
+                let doesPosOverlapPacman = PositionHelper.positionEqual(this.pacman.position, pos);
+                let doesPosOverlapWithAnyGhost =
+                    this.ghosts.some(ghost => {
+                        return PositionHelper.positionEqual(ghost.position, pos)
+                    });
+                if (!doesPosOverlapWall && !doesPosOverlapPacman && !doesPosOverlapWithAnyGhost) {
+                    dotArray.push(pos);
+                }
+            }
+        }
+        return dotArray;
     }
-
     isPositionLegal(pos) {
         //TODO: WRITE A CLASS FOR THE EXCEPTION
         if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.isPositionLegal()."
@@ -78,19 +103,20 @@ class WallEntity {
 }
 
 class GameEntity {
-    constructor(x0, y0, renderCoordinates) {
+    constructor(x0, y0, renderCoordinates, entityType) {
         this._position = [x0, y0];
         this._renderCoordinates = renderCoordinates;
         this._directions = [ [0, 1], [0, -1], [1, 0], [-1, 0] ]
         this._gameInstance = null;
         this._moveDirection = null;
+        this._entityType = entityType
     }
 
-    getLegalMoves() {
+    getLegalMoves(pos = this._position) {
         this.checkGameInstance();
         let legalMoves = [];
         this._directions.forEach( direction => {
-            let newPos = PositionHelper.add(this._position, direction);
+            let newPos = PositionHelper.add(pos, direction);
             if(this._gameInstance.isPositionLegal(newPos))
                 legalMoves.push(direction);
         } );
@@ -107,16 +133,19 @@ class GameEntity {
         if(actionIsLegal)
             this._position = PositionHelper.add(this._position, moveAction);
         this._moveDirection = null
+        this.gameInstance.updateScore();
     }
     set gameInstance(gameInstance) {this._gameInstance = gameInstance;}
     get gameInstance() {return this._gameInstance;}
-    get position() {return this._position;}
     set position(pos) {
         PositionHelper.isPositionFormatValid(pos)
         this._position = pos;
     }
+    get position() {return this._position;}
     set moveDirection(moveDirection) {this._moveDirection = moveDirection}
     get moveDirection() {return this._moveDirection}
+    set entityType(value) {this._entityType = value;}
+    get entityType() {return this._entityType;}
 
     getMoveAction() {
         this.checkGameInstance();
@@ -131,7 +160,7 @@ class GameEntity {
 class PacmanEntity extends GameEntity{
 
     constructor(x0, y0, renderCoordinates) {
-        super(x0, y0, renderCoordinates)
+        super(x0, y0, renderCoordinates, "pacman")
     }
     getMoveAction() {
         this.checkGameInstance();
@@ -142,7 +171,7 @@ class PacmanEntity extends GameEntity{
 class GhostEntity extends GameEntity{
 
     constructor(x0, y0, renderCoordinates, ghostType) {
-        super(x0, y0, renderCoordinates, walls);
+        super(x0, y0, renderCoordinates, "ghost");
         if (ghostType != "minimax" && ghostType != "greedy" && ghostType != "random") throw "Invalid ghost type!";
         this.ghostType = ghostType;
     }
@@ -216,7 +245,7 @@ function main() {
 
     let ghosts = [new GhostEntity(8, 9,[], "greedy"), new GhostEntity(4,5, [], "random")];
     let pacman = new PacmanEntity(0,0, []);
-    let game = new Game(pacman, ghosts, walls, [], 9, 10);
+    let game = new Game(pacman, ghosts, walls, null, 9, 10);
     pacman.gameInstance = game;
     ghosts[0].gameInstance = game;
     ghosts[1].gameInstance = game;
