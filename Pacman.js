@@ -22,6 +22,8 @@ class PositionHelper {
 
 }
 
+
+//TODO: game class-> add return statements when game is over to some functions that can be potentially called after game is over e.g handleMoveEvent()
 class Game {
     constructor(pacman, ghosts, walls, dots, logical_width, logical_height) {
         this._logical_width = logical_width;
@@ -30,7 +32,8 @@ class Game {
         this._pacman = pacman;
         this._ghosts = ghosts;
         this._walls = walls;
-
+        this._countdown = 60;
+        this._isGameOver = false;
         if (dots == null)
             this._dots = this.#generateDotPositions();
         else
@@ -49,15 +52,61 @@ class Game {
     set logical_width(value) {this._logical_width = value;}
     get logical_height() {return this._logical_height;}
     set logical_height(value) {this._logical_height = value;}
+    get isGameOver() {return this._isGameOver;}
+    set countdown(t) {this._countdown = t;}
+    get countdown() {return this._countdown;}
+    get score() {return this._score;}
 
-    //todo: finish is game over class
-    isGameOver() {
-        return this.ghosts.some(ghost => PositionHelper.positionEqual(ghost.position, this.pacman.position))
-        // TODO: ADD CASES WHEN WITH DOTS
-    };
-    updateScore() {
-        //
-    };
+    isPositionLegal(pos) {
+        //TODO: WRITE A CLASS FOR THE EXCEPTION
+        if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.isPositionLegal()."
+        return !(this.#isWallPosition(pos)) && !(this.#doesPositionExceedLogicalBounds(pos))
+    }
+
+    checkPacmanCaught() {
+        if (this._ghosts.some( ghost => PositionHelper.positionEqual(this._pacman.position, ghost.position)))
+            this.#handlePacmanCaughtEvent();
+    }
+
+    checkPacmanOnDot() {
+        if (this._dots.some(dot => PositionHelper.positionEqual(this._pacman.position, dot)))
+            this.#handleDotEatenEvent();
+    }
+
+    handleMoveEvent() {
+        if (this.isGameOver) return;
+        this.checkPacmanCaught();
+        //TODO: SEE IF THIS FUNCTION NEEDS NOT TO BE EXECUTED IF THE FIRST ONE IS EXECUTED
+        this.checkPacmanOnDot();
+    }
+
+    #handleDotEatenEvent() {
+
+        // adjust score, remove the dots from dot array
+        let dotIndex = this._dots.findIndex( dot => { return PositionHelper.positionEqual(this._pacman.position, dot) } )
+        console.log(dotIndex)
+        this._dots.splice(dotIndex, 1);
+        this._score += 100;
+        // check if dots array is empty, if yes: score += countdown * 100; END GAME;
+        if (this._dots.length <= 0) {
+            this._score += 100 * this._countdown;
+            this.#endGame();
+        }
+    }
+
+    #handlePacmanCaughtEvent() {
+        console.log("PACMAN CAUGHT EVENT")
+        this._score -= 500;
+        if (this._score <= 0)
+            this.#endGame();
+        else
+            this.#putGhostsIntoInitialPositions();
+    }
+
+    #putGhostsIntoInitialPositions() {
+        this._ghosts.forEach( ghost => ghost.position = [ghost.initialX, ghost.initialY] );
+    }
+
     #generateDotPositions() {
         let dotArray = [];
         for(let i = 0; i < this.logical_width; i++) {
@@ -76,11 +125,6 @@ class Game {
         }
         return dotArray;
     }
-    isPositionLegal(pos) {
-        //TODO: WRITE A CLASS FOR THE EXCEPTION
-        if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.isPositionLegal()."
-        return !(this.#isWallPosition(pos)) && !(this.#doesPositionExceedLogicalBounds(pos))
-    }
     #isWallPosition(pos) {
         if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.#isWallPosition()."
         for(let WallEntity of this.walls)
@@ -92,7 +136,10 @@ class Game {
         if (!PositionHelper.isPositionFormatValid(pos)) throw "Invalid Position at Game.doesPositionExceedLogicalBounds()."
         return (pos[0] < 0 || pos[0] >= this.logical_width) || (pos[1] < 0 || pos[1] >= this.logical_height);
     }
-
+    #endGame() {
+        console.log("END GAME SET TRUE")
+        this._isGameOver = true
+    }
 }
 
 class WallEntity {
@@ -105,6 +152,8 @@ class WallEntity {
 class GameEntity {
     constructor(x0, y0, renderCoordinates, entityType) {
         this._position = [x0, y0];
+        this._initialX = x0;
+        this._initialY = y0;
         this._renderCoordinates = renderCoordinates;
         this._directions = [ [0, 1], [0, -1], [1, 0], [-1, 0] ]
         this._gameInstance = null;
@@ -133,7 +182,7 @@ class GameEntity {
         if(actionIsLegal)
             this._position = PositionHelper.add(this._position, moveAction);
         this._moveDirection = null
-        this.gameInstance.updateScore();
+        this.gameInstance.handleMoveEvent()
     }
     set gameInstance(gameInstance) {this._gameInstance = gameInstance;}
     get gameInstance() {return this._gameInstance;}
@@ -146,6 +195,8 @@ class GameEntity {
     get moveDirection() {return this._moveDirection}
     set entityType(value) {this._entityType = value;}
     get entityType() {return this._entityType;}
+    get initialX() {return this._initialX;}
+    get initialY(){return this._initialY;}
 
     getMoveAction() {
         this.checkGameInstance();
@@ -174,6 +225,7 @@ class GhostEntity extends GameEntity{
         super(x0, y0, renderCoordinates, "ghost");
         if (ghostType != "minimax" && ghostType != "greedy" && ghostType != "random") throw "Invalid ghost type!";
         this.ghostType = ghostType;
+
     }
     getMoveAction() {
         this.checkGameInstance();
@@ -243,12 +295,15 @@ const walls = [
 
 function main() {
 
-    let ghosts = [new GhostEntity(8, 9,[], "greedy"), new GhostEntity(4,5, [], "random")];
+    let ghosts = [new GhostEntity(8, 9,[], "greedy"), new GhostEntity(7,9, [], "random")];
     let pacman = new PacmanEntity(0,0, []);
     let game = new Game(pacman, ghosts, walls, null, 9, 10);
+    // let game = new Game(pacman, ghosts, walls, [[0,1]], 9, 10);
     pacman.gameInstance = game;
     ghosts[0].gameInstance = game;
     ghosts[1].gameInstance = game;
+
+
 
     setUpDirectionKeyEventListener(pacman)
     // setInterval(() => {pacman.move(); console.log(pacman.position)}, 500)
@@ -259,9 +314,10 @@ function main() {
             ghost.move();
             console.log("ghost:", ghost.ghostType, " ", ghost.position);
         }
+        console.log(game.score)
         console.log("\n")
 
-        if(game.isGameOver()) {
+        if(game.isGameOver) {
             console.log("GAME OVER!")
             clearInterval(myInterval)
         }
