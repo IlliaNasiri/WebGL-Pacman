@@ -1,6 +1,8 @@
 "use strict"
+import {Renderer} from "./Renderer.js"
+
+//TODO: MOVE POSITION HELPER TO A SEPARATE FILE
 class PositionHelper {
-    //TODO: CHECK COMPATIBILITY WITH OTHER BROWSERS FOR STATIC KEYWORD
     static positionEqual(pos1, pos2) {
         return pos1[0] == pos2[0] && pos1[1] == pos2[1];
     }
@@ -22,10 +24,10 @@ class PositionHelper {
 
 }
 
-
-//TODO: game class-> add return statements when game is over to some functions that can be potentially called after game is over e.g handleMoveEvent()
 class Game {
     constructor(pacman, ghosts, walls, dots, logical_width, logical_height) {
+        this._gamePaused = true;
+        this._gameLoopInterval = null;
         this._logical_width = logical_width;
         this._logical_height = logical_height;
         this._score = 0;
@@ -34,10 +36,12 @@ class Game {
         this._walls = walls;
         this._countdown = 60;
         this._isGameOver = false;
+        this.render = null;
         if (dots == null)
             this._dots = this.#generateDotPositions();
         else
             this.dots = dots;
+
     }
 
     get pacman() {return this._pacman;}
@@ -56,6 +60,42 @@ class Game {
     set countdown(t) {this._countdown = t;}
     get countdown() {return this._countdown;}
     get score() {return this._score;}
+    get gamePaused() {return this._gamePaused}
+
+    startGame() {
+        this._gamePaused = false;
+        // TODO: MAKE RATE A CLASS VARIABLE
+        let rate = 500;
+        this._gameLoopInterval = setInterval(() => {
+            console.log("Pacman: ", this._pacman.position);
+
+            this._pacman.move();
+            for(let ghost of this._ghosts) {
+                ghost.move();
+                console.log("ghost:", ghost.ghostType, " ", ghost.position);
+            }
+
+            console.log(this._score)
+            console.log("\n")
+            if(this._countdown == 0)
+                this.#endGame();
+            if(this._isGameOver) {
+                console.log("GAME OVER!")
+                clearInterval(this._gameLoopInterval)
+            }
+            //TODO: CHANGE THE USED FUNCTION
+            this.renderer.renderDots();
+            this.renderer.renderGameEntities();
+            this.renderer.renderWalls();
+            document.getElementById("time").innerText = "Time: " + Math.floor(this.countdown);
+            document.getElementById("points").innerText = "Points: " + this.score;
+            this.countdown -= (rate/1000);
+        }, rate)
+    }
+    pauseGame() {
+        this._gamePaused = true;
+        clearInterval(this._gameLoopInterval);
+    }
 
     isPositionLegal(pos) {
         //TODO: WRITE A CLASS FOR THE EXCEPTION
@@ -76,15 +116,12 @@ class Game {
     handleMoveEvent() {
         if (this.isGameOver) return;
         this.checkPacmanCaught();
-        //TODO: SEE IF THIS FUNCTION NEEDS NOT TO BE EXECUTED IF THE FIRST ONE IS EXECUTED
         this.checkPacmanOnDot();
     }
 
     #handleDotEatenEvent() {
-
         // adjust score, remove the dots from dot array
         let dotIndex = this._dots.findIndex( dot => { return PositionHelper.positionEqual(this._pacman.position, dot) } )
-        console.log(dotIndex)
         this._dots.splice(dotIndex, 1);
         this._score += 100;
         // check if dots array is empty, if yes: score += countdown * 100; END GAME;
@@ -95,7 +132,6 @@ class Game {
     }
 
     #handlePacmanCaughtEvent() {
-        console.log("PACMAN CAUGHT EVENT")
         this._score -= 500;
         if (this._score <= 0)
             this.#endGame();
@@ -137,7 +173,6 @@ class Game {
         return (pos[0] < 0 || pos[0] >= this.logical_width) || (pos[1] < 0 || pos[1] >= this.logical_height);
     }
     #endGame() {
-        console.log("END GAME SET TRUE")
         this._isGameOver = true
     }
 }
@@ -147,14 +182,29 @@ class WallEntity {
         this.positions = positions;
         this.renderCoordinates = renderCoordinates;
     }
+
+    getLeftBottomCorner() {
+        return this.positions.sort( (a,b) => { return a[0] - b[0] || a[1] - b[1] } )[0]
+    }
+
+    getLeftTopCorner() {
+        return this.positions.sort( (a,b) => { return a[0] - b[0] ||  b[1] - a[1]} )[0]
+    }
+
+    getRightBottomCorner() {
+        return this.positions.sort( (a,b) => { return b[0] - a[0] || a[1] - b[1] } )[0]
+    }
+
+    getRightTopCorner() {
+        return this.positions.sort( (a,b) => { return b[0] - a[0] || b[1] - a[1] } )[0]
+    }
 }
 
 class GameEntity {
-    constructor(x0, y0, renderCoordinates, entityType) {
+    constructor(x0, y0, entityType) {
         this._position = [x0, y0];
         this._initialX = x0;
         this._initialY = y0;
-        this._renderCoordinates = renderCoordinates;
         this._directions = [ [0, 1], [0, -1], [1, 0], [-1, 0] ]
         this._gameInstance = null;
         this._moveDirection = null;
@@ -210,8 +260,8 @@ class GameEntity {
 
 class PacmanEntity extends GameEntity{
 
-    constructor(x0, y0, renderCoordinates) {
-        super(x0, y0, renderCoordinates, "pacman")
+    constructor(x0, y0) {
+        super(x0, y0, "pacman")
     }
     getMoveAction() {
         this.checkGameInstance();
@@ -221,8 +271,8 @@ class PacmanEntity extends GameEntity{
 
 class GhostEntity extends GameEntity{
 
-    constructor(x0, y0, renderCoordinates, ghostType) {
-        super(x0, y0, renderCoordinates, "ghost");
+    constructor(x0, y0, ghostType) {
+        super(x0, y0, "ghost");
         if (ghostType != "minimax" && ghostType != "greedy" && ghostType != "random") throw "Invalid ghost type!";
         this.ghostType = ghostType;
 
@@ -295,40 +345,31 @@ const walls = [
 
 function main() {
 
-    let ghosts = [new GhostEntity(8, 9,[], "greedy"), new GhostEntity(7,9, [], "random")];
-    let pacman = new PacmanEntity(0,0, []);
-    let game = new Game(pacman, ghosts, walls, null, 9, 10);
+    let ghosts = [new GhostEntity(4, 4, "random"), new GhostEntity(4,5, "random")];
+    let pacman = new PacmanEntity(4,0, []);
     // let game = new Game(pacman, ghosts, walls, [[0,1]], 9, 10);
+    let game = new Game(pacman, ghosts, walls, null, 9, 10);
+
+    // let renderer = new Renderer(game, "canvas")
     pacman.gameInstance = game;
     ghosts[0].gameInstance = game;
     ghosts[1].gameInstance = game;
+    setUpDirectionKeyEventListener(pacman, game)
 
+    let renderer = new Renderer(game, "canvas");
+    //TODO: MAKE A RENDERER SETTER, OR SEPERATE ALL OF THIS LOGIC INTO A SEPERATE CLASS
+    game.renderer =renderer;
+        renderer.renderDots();
+    renderer.renderGameEntities();
+    renderer.renderWalls()
 
-
-    setUpDirectionKeyEventListener(pacman)
-    // setInterval(() => {pacman.move(); console.log(pacman.position)}, 500)
-    let myInterval = setInterval(() => {
-        console.log("Pacman: ", pacman.position);
-        pacman.move();
-        for(let ghost of ghosts) {
-            ghost.move();
-            console.log("ghost:", ghost.ghostType, " ", ghost.position);
-        }
-        console.log(game.score)
-        console.log("\n")
-
-        if(game.isGameOver) {
-            console.log("GAME OVER!")
-            clearInterval(myInterval)
-        }
-
-    }, 500)
 }
 
-function setUpDirectionKeyEventListener(pacman) {
+function setUpDirectionKeyEventListener(pacman,game) {
+    let activeKey = {};
     document.addEventListener("keydown", (event) => {
+        activeKey[event.code] = true;
         switch (event.code) {
-
             case "KeyW":
                 pacman.moveDirection = [0,1];
                 break;
@@ -336,16 +377,28 @@ function setUpDirectionKeyEventListener(pacman) {
                 pacman.moveDirection = [1, 0];
                 break;
             case "KeyS":
-                pacman.moveDirection = [0, -1];
+                if(game.gamePaused)
+                    game.startGame();
+                else
+                    pacman.moveDirection = [0, -1];
                 break;
             case "KeyA":
                 pacman.moveDirection = [-1, 0];
                 break;
+            case "KeyP":
+                game.pauseGame();
+                break;
+            case "KeyR":
+                game.startGame();
+                break;
         }
+    })
+
+    document.addEventListener("keyup", (event) => {
+        activeKey[event.code] = false;
     })
 }
 
 main();
-
 // For testing purposes, export needed classes and functions
 export {PositionHelper}
